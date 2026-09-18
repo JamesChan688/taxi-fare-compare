@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>叫車比價 Taxi Fare Compare</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>🚕 叫車比價</h1>
+    <p class="subtitle">輸入起訖點,快速比較各家叫車服務的預估車資</p>
+  </header>
+
+  <main class="app-main">
+    <section class="panel">
+      <form id="fare-form" autocomplete="off">
+        <div class="field">
+          <label for="origin">上車地點</label>
+          <input type="text" id="origin" placeholder="例如:台北車站" required />
+          <ul class="suggestions" id="origin-suggestions" hidden></ul>
+        </div>
+        <div class="field">
+          <label for="destination">目的地</label>
+          <input type="text" id="destination" placeholder="例如:松山機場" required />
+          <ul class="suggestions" id="destination-suggestions" hidden></ul>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="departure-time">出發時間</label>
+            <input type="datetime-local" id="departure-time" />
+          </div>
+          <div class="field checkbox-field">
+            <label><input type="checkbox" id="peak-toggle" /> 尖峰/叫車熱門時段</label>
+          </div>
+        </div>
+
+        <button type="submit" id="compare-btn">開始比價</button>
+      </form>
+
+      <p class="status" id="status" role="status"></p>
+    </section>
+
+    <section class="panel map-panel">
+      <div id="map"></div>
+      <div class="trip-summary" id="trip-summary" hidden></div>
+    </section>
+
+    <section class="panel results-panel" id="results-panel" hidden>
+      <h2>比價結果</h2>
+      <table class="results-table" id="results-table">
+        <thead>
+          <tr>
+            <th>叫車服務</th>
+            <th>預估車資</th>
+            <th>說明</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+      <p class="disclaimer">
+        ⚠️ 以上金額為依公開計費規則換算的<strong>娛樂性估算</strong>,並非各服務實際報價,
+        實際車資請以各叫車 App 現場顯示為準。
+      </p>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>路線資料由 OpenStreetMap / OSRM 提供 · 純前端小專案,無後端伺服器</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="fares.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
