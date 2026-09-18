@@ -35,17 +35,21 @@ jobs:
 
           echo "$RESP" > /tmp/raw.json
 
-          echo "--- Top-level type ---"
-          echo "$RESP" | jq 'type, (if type=="array" then length else keys end)'
+          echo "--- Top-level keys ---"
+          echo "$RESP" | jq 'keys'
 
-          echo "--- Element[0] ---"
-          echo "$RESP" | jq '.[0]'
+          echo "--- VDLives[0] ---"
+          echo "$RESP" | jq '.VDLives[0]'
 
-          echo "--- HTTP status check (full count, no top) ---"
-          curl -s -o /tmp/full.json -w "HTTP:%{http_code} SIZE:%{size_download}\n" -H "Authorization: Bearer ${TOKEN}" \
+          echo "--- VDLives[0].LinkFlows[0] (if exists) ---"
+          echo "$RESP" | jq '.VDLives[0].LinkFlows[0] // "n/a"'
+
+          echo "--- Full VD count for Taipei ---"
+          curl -s -o /tmp/full.json -H "Authorization: Bearer ${TOKEN}" \
             "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/Taipei?%24format=JSON"
-          echo "Full VD count for Taipei:"
-          jq 'length' /tmp/full.json
+          jq '.VDLives | length' /tmp/full.json
+          echo "--- distinct top-level fields across VDLives[0] ---"
+          jq '.VDLives[0] | keys' /tmp/full.json
 
       - name: Upload raw response
         uses: actions/upload-artifact@v4
