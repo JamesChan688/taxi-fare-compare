@@ -54,6 +54,22 @@ const PROVIDERS = [
     },
   },
   {
+    id: "yoxi",
+    name: "Yoxi 風格",
+    note: "跳錶費 + 預約叫車費 20 元,會員常態 95 折。",
+    estimate({ distanceKm, isNight, delayMinutes }) {
+      const base = 85;
+      const extraKm = Math.max(0, distanceKm - 1.25);
+      const distanceFare = Math.ceil(extraKm / 0.2) * 5;
+      const delayFare = Math.floor(delayMinutes / 5) * 5;
+      let total = (base + distanceFare + delayFare) * 0.95 + 20;
+      if (isNight) total += 20;
+      const notes = ["會員 95 折"];
+      if (delayFare > 0) notes.push(`塞車延滯 +${delayFare} 元`);
+      return { total: Math.round(total), note: notes.join(" · ") };
+    },
+  },
+  {
     id: "dynamic",
     name: "動態計價風格(類 Uber)",
     note: "起跳 60 元 + 每公里 12 元 + 每分鐘 2 元,尖峰/壅塞動態加乘。",
