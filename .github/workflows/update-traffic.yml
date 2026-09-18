@@ -32,7 +32,9 @@ jobs:
           fi
 
           mkdir -p data
-          CITIES="Taipei NewTaipei Taoyuan Taichung Tainan Kaohsiung"
+          # NewTaipei is intentionally excluded: this TDX endpoint returns HTTP 400 for it
+          # (New Taipei's road authority does not publish VD data through this feed).
+          CITIES="Taipei Taoyuan Taichung Tainan Kaohsiung"
           CITIES_JSON="{}"
 
           for CITY in $CITIES; do
