@@ -31,24 +31,21 @@ jobs:
           echo "Got token, length: ${#TOKEN}"
 
           RESP=$(curl -s -H "Authorization: Bearer ${TOKEN}" \
-            "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/CongestionLevel/City/Taipei?%24format=JSON")
+            "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/Taipei?%24top=5&%24format=JSON")
 
           echo "$RESP" > /tmp/raw.json
 
-          echo "--- Top-level keys ---"
-          echo "$RESP" | jq 'keys'
+          echo "--- Top-level type ---"
+          echo "$RESP" | jq 'type, (if type=="array" then length else keys end)'
 
-          echo "--- CongestionLevels length ---"
-          echo "$RESP" | jq '.CongestionLevels | length'
+          echo "--- Element[0] ---"
+          echo "$RESP" | jq '.[0]'
 
-          echo "--- CongestionLevels[0] ---"
-          echo "$RESP" | jq '.CongestionLevels[0]'
-
-          echo "--- CongestionLevels[1] ---"
-          echo "$RESP" | jq '.CongestionLevels[1]'
-
-          echo "--- Other top-level fields ---"
-          echo "$RESP" | jq 'del(.CongestionLevels)'
+          echo "--- HTTP status check (full count, no top) ---"
+          curl -s -o /tmp/full.json -w "HTTP:%{http_code} SIZE:%{size_download}\n" -H "Authorization: Bearer ${TOKEN}" \
+            "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/Taipei?%24format=JSON"
+          echo "Full VD count for Taipei:"
+          jq 'length' /tmp/full.json
 
       - name: Upload raw response
         uses: actions/upload-artifact@v4
