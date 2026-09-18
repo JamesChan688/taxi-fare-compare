@@ -35,14 +35,20 @@ jobs:
 
           echo "$RESP" > /tmp/raw.json
 
-          echo "--- Top-level type/length ---"
-          echo "$RESP" | jq 'type, (if type=="array" then length else keys end)'
+          echo "--- Top-level keys ---"
+          echo "$RESP" | jq 'keys'
 
-          echo "--- First element ---"
-          echo "$RESP" | jq '.[0]'
+          echo "--- CongestionLevels length ---"
+          echo "$RESP" | jq '.CongestionLevels | length'
 
-          echo "--- Second element ---"
-          echo "$RESP" | jq '.[1]'
+          echo "--- CongestionLevels[0] ---"
+          echo "$RESP" | jq '.CongestionLevels[0]'
+
+          echo "--- CongestionLevels[1] ---"
+          echo "$RESP" | jq '.CongestionLevels[1]'
+
+          echo "--- Other top-level fields ---"
+          echo "$RESP" | jq 'del(.CongestionLevels)'
 
       - name: Upload raw response
         uses: actions/upload-artifact@v4
