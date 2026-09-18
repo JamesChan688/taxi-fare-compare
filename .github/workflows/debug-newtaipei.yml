@@ -14,10 +14,25 @@ jobs:
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=client_credentials&client_id=${TDX_CLIENT_ID}&client_secret=${TDX_CLIENT_SECRET}" \
             | jq -r .access_token)
-          for CITY in NewTaipei Taichung Kaohsiung; do
-            echo "=== $CITY ==="
-            curl -s -w "\nHTTP:%{http_code}\n" -H "Authorization: Bearer ${TOKEN}" \
-              "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/${CITY}?%24top=3&%24format=JSON" -o /tmp/resp.json -w "HTTP:%{http_code}\n"
-            jq '.VDLives | length' /tmp/resp.json
-            jq '[.VDLives[]?.LinkFlows[]?.Lanes[]? | .ErrorType] | group_by(.) | map({key: .[0], count: length})' /tmp/resp.json
+
+          echo "--- Try alternate NewTaipei codes ---"
+          for CODE in NewTaipei NewTaipeiCity "New Taipei City" Xinbei; do
+            ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$CODE")
+            CODE_RESULT=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" \
+              "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/${ENC}?%24top=1&%24format=JSON")
+            echo "$CODE -> HTTP $CODE_RESULT"
           done
+
+          echo "--- Full Kaohsiung fetch ---"
+          curl -s -H "Authorization: Bearer ${TOKEN}" \
+            "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/Kaohsiung?%24format=JSON" -o /tmp/kh.json
+          echo "byte size:"; wc -c < /tmp/kh.json
+          echo "VDLives length:"; jq '.VDLives | length' /tmp/kh.json
+          echo "ErrorType distribution:"; jq '[.VDLives[]?.LinkFlows[]?.Lanes[]?.ErrorType] | group_by(.) | map({key:.[0], count: length})' /tmp/kh.json
+          echo "Speed field sample (first 3 raw lanes):"; jq '[.VDLives[0,1,2]?.LinkFlows[]?.Lanes[]?] ' /tmp/kh.json
+
+          echo "--- Full Taichung fetch ---"
+          curl -s -H "Authorization: Bearer ${TOKEN}" \
+            "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/Taichung?%24format=JSON" -o /tmp/tc.json
+          echo "byte size:"; wc -c < /tmp/tc.json
+          echo "VDLives length:"; jq '.VDLives | length' /tmp/tc.json
