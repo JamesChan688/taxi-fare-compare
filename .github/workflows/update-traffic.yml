@@ -1,0 +1,70 @@
+name: Update Traffic Data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch live VD speeds per city and build traffic.json
+        env:
+          TDX_CLIENT_ID: ${{ secrets.TDX_CLIENT_ID }}
+          TDX_CLIENT_SECRET: ${{ secrets.TDX_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          TOKEN=$(curl -s -X POST "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${TDX_CLIENT_ID}&client_secret=${TDX_CLIENT_SECRET}" \
+            | jq -r .access_token)
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Failed to obtain TDX access token"
+            exit 1
+          fi
+
+          mkdir -p data
+          CITIES="Taipei NewTaipei Taoyuan Taichung Tainan Kaohsiung"
+          CITIES_JSON="{}"
+
+          for CITY in $CITIES; do
+            echo "Fetching VD live data for $CITY..."
+            RESP=$(curl -s -H "Authorization: Bearer ${TOKEN}" \
+              "https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/VD/City/${CITY}?%24format=JSON")
+
+            CITY_STATS=$(echo "$RESP" | jq '
+              [.VDLives[]?.LinkFlows[]?.Lanes[]? |
+                select(.ErrorType == "diag0" and ((.Speed // 0) > 0)) | .Speed] as $speeds
+              | {
+                  sampleCount: ($speeds | length),
+                  avgSpeedKmh: (if ($speeds | length) > 0
+                    then (($speeds | add) / ($speeds | length) * 10 | round / 10)
+                    else null end)
+                }
+            ')
+
+            CITIES_JSON=$(echo "$CITIES_JSON" | jq --arg city "$CITY" --argjson stats "$CITY_STATS" '. + {($city): $stats}')
+          done
+
+          jq -n --argjson cities "$CITIES_JSON" \
+            --arg updatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{updatedAt: $updatedAt, source: "TDX Road/Traffic/Live/VD", cities: $cities}' \
+            > data/traffic.json
+
+          cat data/traffic.json
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/traffic.json
+          git diff --cached --quiet || git commit -m "Update traffic data [skip ci]"
+          git push

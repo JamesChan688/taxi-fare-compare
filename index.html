@@ -18,7 +18,10 @@
       <form id="fare-form" autocomplete="off">
         <div class="field">
           <label for="origin">上車地點</label>
-          <input type="text" id="origin" placeholder="例如:台北車站" required />
+          <div class="input-with-action">
+            <input type="text" id="origin" placeholder="例如:台北車站" required />
+            <button type="button" id="use-current-location" title="使用目前位置">📍 目前位置</button>
+          </div>
           <ul class="suggestions" id="origin-suggestions" hidden></ul>
         </div>
         <div class="field">

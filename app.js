@@ -1,5 +1,41 @@
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 const OSRM_URL = "https://router.project-osrm.org/route/v1/driving";
+const TRAFFIC_DATA_URL = "data/traffic.json";
+const REFERENCE_SPEED_KMH = 30; // 假設的「正常車流」平均時速,用來換算壅塞係數
+
+// Nominatim 回傳的中文縣市名稱 -> TDX 城市代碼(僅涵蓋目前有抓即時路況的城市)
+const CITY_NAME_TO_TDX_CODE = {
+  "台北市": "Taipei",
+  "臺北市": "Taipei",
+  "新北市": "NewTaipei",
+  "桃園市": "Taoyuan",
+  "台中市": "Taichung",
+  "臺中市": "Taichung",
+  "台南市": "Tainan",
+  "臺南市": "Tainan",
+  "高雄市": "Kaohsiung",
+};
+
+let trafficData = null;
+fetch(TRAFFIC_DATA_URL)
+  .then((res) => (res.ok ? res.json() : null))
+  .then((data) => {
+    trafficData = data;
+  })
+  .catch(() => {
+    trafficData = null;
+  });
+
+function getCongestionInfo(cityName) {
+  const cityCode = CITY_NAME_TO_TDX_CODE[cityName];
+  const cityStats = cityCode && trafficData?.cities?.[cityCode];
+  if (!cityStats || !cityStats.avgSpeedKmh) {
+    return { multiplier: 1, avgSpeedKmh: null, cityCode: cityCode || null };
+  }
+  const multiplier = Math.min(1.8, Math.max(1, REFERENCE_SPEED_KMH / cityStats.avgSpeedKmh));
+  return { multiplier, avgSpeedKmh: cityStats.avgSpeedKmh, cityCode };
+}
 
 const originInput = document.getElementById("origin");
 const destinationInput = document.getElementById("destination");
@@ -41,7 +77,7 @@ async function searchPlaces(query) {
     format: "jsonv2",
     limit: "6",
     countrycodes: "tw",
-    addressdetails: "0",
+    addressdetails: "1",
   });
   const res = await fetch(`${NOMINATIM_URL}?${params.toString()}`, {
     headers: { Accept: "application/json" },
@@ -73,7 +109,8 @@ function wireAutocomplete(inputEl, listEl, onSelect) {
       renderSuggestions(listEl, results, (item) => {
         inputEl.value = item.display_name;
         listEl.hidden = true;
-        onSelect({ lat: parseFloat(item.lat), lon: parseFloat(item.lon), label: item.display_name });
+        const city = item.address?.city || item.address?.county || null;
+        onSelect({ lat: parseFloat(item.lat), lon: parseFloat(item.lon), label: item.display_name, city });
       });
     } catch (err) {
       listEl.hidden = true;
@@ -94,6 +131,56 @@ function wireAutocomplete(inputEl, listEl, onSelect) {
 
 wireAutocomplete(originInput, originSuggestions, (point) => (originPoint = point));
 wireAutocomplete(destinationInput, destinationSuggestions, (point) => (destinationPoint = point));
+
+const useCurrentLocationBtn = document.getElementById("use-current-location");
+
+async function reverseGeocode(lat, lon) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(lat),
+    lon: String(lon),
+    addressdetails: "1",
+  });
+  const res = await fetch(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error("反查地址失敗");
+  return res.json();
+}
+
+useCurrentLocationBtn.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    setStatus("這個瀏覽器不支援定位功能");
+    return;
+  }
+
+  useCurrentLocationBtn.disabled = true;
+  setStatus("正在取得目前位置…");
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const place = await reverseGeocode(latitude, longitude);
+        const city = place.address?.city || place.address?.county || null;
+        originPoint = { lat: latitude, lon: longitude, label: place.display_name, city };
+        originInput.value = place.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        setStatus("");
+      } catch (err) {
+        originPoint = { lat: latitude, lon: longitude, label: "目前位置", city: null };
+        originInput.value = "目前位置";
+        setStatus("已定位,但無法反查地址名稱");
+      } finally {
+        useCurrentLocationBtn.disabled = false;
+      }
+    },
+    (err) => {
+      useCurrentLocationBtn.disabled = false;
+      setStatus(err.code === err.PERMISSION_DENIED ? "已拒絕定位權限,請手動輸入地址" : "無法取得目前位置");
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
 
 function setStatus(text) {
   statusEl.textContent = text || "";
@@ -138,8 +225,19 @@ function isPeakTime(date) {
   return (h >= 7 && h < 9) || (h >= 17 && h < 19);
 }
 
-function renderResults({ distanceKm, durationMin, isNight, isPeak }) {
-  const fares = estimateAllFares({ distanceKm, durationMin, isNight, isPeak });
+function renderResults({ distanceKm, baseDurationMin, isNight, isPeak, congestion }) {
+  const { multiplier: congestionMultiplier, avgSpeedKmh } = congestion;
+  const adjustedDurationMin = baseDurationMin * congestionMultiplier;
+  const delayMinutes = Math.max(0, adjustedDurationMin - baseDurationMin);
+
+  const fares = estimateAllFares({
+    distanceKm,
+    durationMin: adjustedDurationMin,
+    isNight,
+    isPeak,
+    delayMinutes,
+    congestionMultiplier,
+  });
 
   resultsBody.innerHTML = "";
   fares.forEach((fare, index) => {
@@ -160,10 +258,20 @@ function renderResults({ distanceKm, durationMin, isNight, isPeak }) {
     resultsBody.appendChild(tr);
   });
 
+  const parts = [
+    `距離約 ${distanceKm.toFixed(1)} 公里`,
+    `一般車程 ${Math.round(baseDurationMin)} 分鐘`,
+  ];
+  if (avgSpeedKmh) {
+    parts.push(`目前該縣市平均車速約 ${avgSpeedKmh} km/h(TDX 即時路況,壅塞係數 x${congestionMultiplier.toFixed(2)})`);
+  } else {
+    parts.push("此區域暫無即時路況資料");
+  }
+  if (isNight) parts.push("夜間時段");
+  if (isPeak) parts.push("尖峰時段");
+
   tripSummary.hidden = false;
-  tripSummary.textContent = `距離約 ${distanceKm.toFixed(1)} 公里 · 預估車程 ${Math.round(durationMin)} 分鐘${
-    isNight ? " · 夜間時段" : ""
-  }${isPeak ? " · 尖峰時段" : ""}`;
+  tripSummary.textContent = parts.join(" · ");
 
   resultsPanel.hidden = false;
 }
@@ -189,13 +297,14 @@ form.addEventListener("submit", async (e) => {
     drawRoute(route);
 
     const distanceKm = route.distance / 1000;
-    const durationMin = route.duration / 60;
+    const baseDurationMin = route.duration / 60;
 
     const departureValue = departureInput.value ? new Date(departureInput.value) : new Date();
     const isNight = isNightTime(departureValue);
     const isPeak = peakToggle.checked || isPeakTime(departureValue);
+    const congestion = getCongestionInfo(originPoint.city);
 
-    renderResults({ distanceKm, durationMin, isNight, isPeak });
+    renderResults({ distanceKm, baseDurationMin, isNight, isPeak, congestion });
     setStatus("");
   } catch (err) {
     setStatus(err.message || "發生錯誤,請稍後再試");
