@@ -1,26 +1,26 @@
 {
-  "updatedAt": "2026-11-01T22:20:40Z",
+  "updatedAt": "2026-11-02T01:43:55Z",
   "source": "TDX Road/Traffic/Live/VD",
   "cities": {
     "Taipei": {
-      "sampleCount": 1100,
-      "avgSpeedKmh": 52.1
+      "sampleCount": 1511,
+      "avgSpeedKmh": 45.4
     },
     "Taoyuan": {
-      "sampleCount": 423,
-      "avgSpeedKmh": 46.9
+      "sampleCount": 488,
+      "avgSpeedKmh": 42.8
     },
     "Taichung": {
       "sampleCount": 0,
       "avgSpeedKmh": null
     },
     "Tainan": {
-      "sampleCount": 7,
-      "avgSpeedKmh": 33.3
+      "sampleCount": 5,
+      "avgSpeedKmh": 52.8
     },
     "Kaohsiung": {
-      "sampleCount": 168,
-      "avgSpeedKmh": 50.7
+      "sampleCount": 207,
+      "avgSpeedKmh": 46.3
     }
   }
 }
